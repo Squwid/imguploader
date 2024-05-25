@@ -41,6 +41,20 @@ func main() {
 	}
 	defer watcher.Close()
 
+	// Check for files that were not uploaded yet.
+	fs, err := os.ReadDir(watchPath)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Error on initial read")
+	}
+	for _, f := range fs {
+		if !f.IsDir() {
+			if err := maybeUploadFile(client,
+				filepath.Join(watchPath, f.Name())); err != nil {
+				logrus.WithError(err).Error("Error uploading")
+			}
+		}
+	}
+
 	done := make(chan bool)
 	go func() {
 		for {
@@ -50,11 +64,8 @@ func main() {
 					return
 				}
 				if event.Op&fsnotify.Create == fsnotify.Create {
-					ext := filepath.Ext(event.Name)
-					if ext == ".png" || ext == ".jpg" || ext == ".jpeg" {
-						if err := upload(client, event.Name, ext); err != nil {
-							logrus.WithError(err).Errorf("Error uploading file")
-						}
+					if err := maybeUploadFile(client, event.Name); err != nil {
+						logrus.WithError(err).Error("Error uploading")
 					}
 				}
 			case err, ok := <-watcher.Errors:
@@ -71,6 +82,14 @@ func main() {
 	}
 	logrus.WithField("Path", watchPath).Infof("Watching for new PNG and JPEG files")
 	<-done
+}
+
+func maybeUploadFile(client *storage.Client, file string) error {
+	ext := filepath.Ext(file)
+	if ext == ".png" || ext == ".jpg" || ext == ".jpeg" {
+		return upload(client, file, ext)
+	}
+	return nil
 }
 
 func upload(client *storage.Client, file, ext string) error {
@@ -103,7 +122,13 @@ func upload(client *storage.Client, file, ext string) error {
 		return err
 	}
 
-	fmt.Printf("Uploaded image to %s/%s", url, cloudFile)
+	// Remove file once it is dragged in and uploaded
+	// TODO: Configure this via CLI or something.
+	if err := os.Remove(file); err != nil {
+		return err
+	}
+
+	fmt.Printf("Uploaded image to %s/%s\n", url, cloudFile)
 	return nil
 }
 

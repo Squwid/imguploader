@@ -80,7 +80,7 @@ func main() {
 	if err := watcher.Add(watchPath); err != nil {
 		logrus.WithError(err).Fatalf("Error adding watcher")
 	}
-	logrus.WithField("Path", watchPath).Infof("Watching for new PNG and JPEG files")
+	logrus.WithField("Path", watchPath).Infof("Watching")
 	<-done
 }
 
